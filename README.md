@@ -1,4 +1,4 @@
-# Jenkins MCP Server
+# Jenkins MCP Server.
 
 An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.
 
