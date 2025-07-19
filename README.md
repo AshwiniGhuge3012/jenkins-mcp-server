@@ -23,7 +23,7 @@ An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/AshwiniGhuge3012/jenkins-mcp-server
     cd jenkins_mcp
     ```
 
