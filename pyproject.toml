@@ -1,7 +1,7 @@
 [project]
 name = "mcp-jenkins-server"
 version = "0.1.0"
-description = "Add your description here"
+description = "An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
