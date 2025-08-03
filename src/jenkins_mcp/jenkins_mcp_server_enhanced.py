@@ -40,6 +40,9 @@ JENKINS_URL = os.getenv("JENKINS_URL", "http://localhost:8080")
 JENKINS_USER = os.getenv("JENKINS_USER")
 JENKINS_API_TOKEN = os.getenv("JENKINS_API_TOKEN")
 
+if not JENKINS_USER or not JENKINS_API_TOKEN:
+    logger.error("Missing Jenkins credentials. Please set JENKINS_USER and JENKINS_API_TOKEN.")
+    sys.exit(1)
 # --- LLM Integration Resources ---
 
 # This section includes resources, prompts, and sampling configurations for LLM integration.
@@ -147,9 +150,11 @@ def jenkins_request(method, endpoint, context: Dict[str, Any], is_job_specific: 
 parser = argparse.ArgumentParser(description="Jenkins MCP Server", add_help=False)
 parser.add_argument("--port", type=str, default=os.getenv("MCP_PORT", "8010"),
                     help="Port for the MCP server (default: 8010 or from MCP_PORT env var)")
+parser.add_argument("--host", type=str, default=os.getenv("MCP_HOST", "0.0.0.0"),
+                    help="Host for the MCP server (default: 0.0.0.0 or from MCP_HOST env var)")
 args, unknown = parser.parse_known_args()
 
-mcp = FastMCP("jenkins_server", port=args.port)
+mcp = FastMCP("jenkins_server", port=args.port, host=args.host)
 
 # --- Context Generation ---
 def get_request_context() -> Dict[str, Any]:
@@ -391,6 +396,11 @@ def get_health() -> HealthCheckResponse:
         return HealthCheckResponse(status="error", details=f"Failed to connect to Jenkins: {str(e)}")
 
 if __name__ == "__main__":
-    logger.info(f"Starting Jenkins MCP server on port {args.port}")
-    sys.argv = [sys.argv[0]] + unknown
-    mcp.run(transport="streamable-http")
+    try:
+        logger.info(f"Starting Jenkins MCP server on port {args.port}")
+        sys.argv = [sys.argv[0]] + unknown
+        mcp.run(transport="streamable-http")
+    except Exception as e:
+        logger.exception("Fatal error in MCP server runtime:")
+        sys.exit(1)
+
