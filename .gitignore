@@ -10,3 +10,6 @@ wheels/
 .venv
 .env
 uv.lock
+
+CLAUDE.md
+.gitignore
