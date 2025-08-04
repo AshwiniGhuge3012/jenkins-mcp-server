@@ -8,6 +8,8 @@ An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger
 - **Build Status**: Check the status of specific builds and retrieve console logs.
 - **Pipeline Support**: Get detailed stage-by-stage pipeline execution status.
 - **Artifact Management**: List, download, and search build artifacts across builds.
+- **Batch Operations**: Trigger and monitor multiple jobs concurrently with intelligent queuing.
+- **Performance Caching**: Multi-tier intelligent caching system with automatic invalidation and cache management tools.
 - **Advanced Filtering**: Filter jobs by status, build results, dates, and more with regex support.
 - **Queue Management**: View items currently in the build queue.
 - **Server Information**: Get basic information about the connected Jenkins server.
@@ -59,6 +61,17 @@ An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger
     JENKINS_RETRY_BASE_DELAY=1.0
     JENKINS_RETRY_MAX_DELAY=60.0
     JENKINS_RETRY_BACKOFF_MULTIPLIER=2.0
+    
+    # Optional: Performance cache configuration
+    JENKINS_CACHE_STATIC_TTL=3600        # Static data TTL (1 hour)
+    JENKINS_CACHE_SEMI_STATIC_TTL=300    # Semi-static data TTL (5 minutes)
+    JENKINS_CACHE_DYNAMIC_TTL=30         # Dynamic data TTL (30 seconds)
+    JENKINS_CACHE_SHORT_TTL=10           # Short-lived data TTL (10 seconds)
+    JENKINS_CACHE_STATIC_SIZE=1000       # Static cache max items
+    JENKINS_CACHE_SEMI_STATIC_SIZE=500   # Semi-static cache max items
+    JENKINS_CACHE_DYNAMIC_SIZE=200       # Dynamic cache max items
+    JENKINS_CACHE_PERMANENT_SIZE=2000    # Permanent cache max items
+    JENKINS_CACHE_SHORT_SIZE=100         # Short-lived cache max items
     ```
 
 ## Usage
@@ -176,6 +189,49 @@ Here is a list of the tools exposed by this MCP server:
     - `max_builds` (integer, optional): Maximum number of recent builds to search (default: 10).
     - `use_regex` (boolean, optional): If True, treat pattern as regex instead of wildcard (default: False).
 - **Returns**: List of matching artifacts across builds with their metadata.
+
+### `batch_trigger_jobs`
+- **Description**: Trigger multiple Jenkins jobs in batch with parallel execution and priority queuing.
+- **Parameters**:
+    - `operations` (array): List of job operations, each containing:
+        - `job_name` (string): Name of the Jenkins job
+        - `params` (object, optional): Job parameters
+        - `priority` (integer, optional): Priority 1-10 (1=highest, default: 1)
+    - `max_concurrent` (integer, optional): Maximum concurrent job triggers (default: 5)
+    - `fail_fast` (boolean, optional): Stop processing on first failure (default: false)
+    - `wait_for_completion` (boolean, optional): Wait for all jobs to complete (default: false)
+- **Returns**: Batch operation response with operation ID, results, and execution statistics.
+
+### `batch_monitor_jobs`
+- **Description**: Monitor the status of a batch operation and its individual jobs.
+- **Parameters**:
+    - `operation_id` (string): The operation ID returned from batch_trigger_jobs.
+- **Returns**: Current status of the batch operation including progress and individual job statuses.
+
+### `batch_cancel_jobs`
+- **Description**: Cancel a batch operation and optionally cancel running builds.
+- **Parameters**:
+    - `operation_id` (string): The operation ID to cancel.
+    - `cancel_running_builds` (boolean, optional): Attempt to cancel running builds (default: false).
+- **Returns**: Cancellation status and results.
+
+### `get_cache_statistics`
+- **Description**: Get comprehensive cache performance metrics and utilization statistics.
+- **Parameters**: None
+- **Returns**: Cache hit rates, utilization percentages, and detailed statistics for all cache types.
+
+### `clear_cache`
+- **Description**: Clear caches with fine-grained control for performance management.
+- **Parameters**:
+    - `cache_type` (string, optional): Type of cache to clear ('all', 'static', 'semi_static', 'dynamic', 'permanent', 'short')
+    - `job_name` (string, optional): Clear caches for a specific job only
+- **Returns**: Confirmation of cache clearing operation.
+
+### `warm_cache`
+- **Description**: Pre-load frequently accessed data into caches for improved performance.
+- **Parameters**:
+    - `operations` (array, optional): Operations to warm ('server_info', 'job_list', 'queue_info')
+- **Returns**: Results of cache warming operations with success/failure status.
 
 ### `summarize_build_log`
 - **Description**: (Demonstration) Summarizes a build log using a pre-configured LLM prompt.

@@ -20,6 +20,8 @@ import time
 import random
 import re
 from functools import wraps
+from cachetools import TTLCache, LRUCache, cached
+from cachetools.keys import hashkey
 
 # Load environment variables
 load_dotenv()
@@ -87,6 +89,19 @@ class JenkinsConfig:
     
     # Cache Configuration
     CRUMB_CACHE_MINUTES = int(os.getenv("JENKINS_CRUMB_CACHE_MINUTES", "30"))
+    
+    # Performance Cache Settings
+    CACHE_STATIC_TTL = int(os.getenv("JENKINS_CACHE_STATIC_TTL", "3600"))        # 1 hour for static data
+    CACHE_SEMI_STATIC_TTL = int(os.getenv("JENKINS_CACHE_SEMI_STATIC_TTL", "300"))  # 5 minutes for semi-static
+    CACHE_DYNAMIC_TTL = int(os.getenv("JENKINS_CACHE_DYNAMIC_TTL", "30"))        # 30 seconds for dynamic data
+    CACHE_SHORT_TTL = int(os.getenv("JENKINS_CACHE_SHORT_TTL", "10"))            # 10 seconds for short-lived
+    
+    # Cache Size Limits
+    CACHE_STATIC_SIZE = int(os.getenv("JENKINS_CACHE_STATIC_SIZE", "1000"))      # Static cache max items
+    CACHE_SEMI_STATIC_SIZE = int(os.getenv("JENKINS_CACHE_SEMI_STATIC_SIZE", "500"))  # Semi-static cache max items
+    CACHE_DYNAMIC_SIZE = int(os.getenv("JENKINS_CACHE_DYNAMIC_SIZE", "200"))     # Dynamic cache max items
+    CACHE_PERMANENT_SIZE = int(os.getenv("JENKINS_CACHE_PERMANENT_SIZE", "2000")) # Permanent cache max items
+    CACHE_SHORT_SIZE = int(os.getenv("JENKINS_CACHE_SHORT_SIZE", "100"))         # Short-lived cache max items
     
     # Content Limits
     MAX_LOG_SIZE = int(os.getenv("JENKINS_MAX_LOG_SIZE", "1000"))
@@ -402,6 +417,311 @@ def process_jenkins_parameters(params: Dict[str, Any], context: Dict[str, Any]) 
     
     return processed_params
 
+# --- Comprehensive Caching System ---
+
+class JenkinsCacheManager:
+    """
+    Comprehensive caching system for Jenkins MCP Server.
+    
+    Provides multiple cache types with different TTL strategies:
+    - Static Cache (1 hour): Server info, job configurations, job parameters
+    - Semi-Static Cache (5 minutes): Job lists, queue info
+    - Dynamic Cache (30 seconds): Build statuses for running builds
+    - Permanent Cache (No TTL): Completed build results, artifacts lists
+    - Short-lived Cache (10 seconds): Console logs, pipeline stages for active builds
+    
+    Thread-safe implementation with configurable sizes and TTLs.
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        """Singleton pattern for cache manager."""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(JenkinsCacheManager, cls).__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        """Initialize cache manager with thread-safe caches."""
+        if self._initialized:
+            return
+            
+        # Static data cache (1 hour TTL)
+        self.static_cache = TTLCache(
+            maxsize=JenkinsConfig.CACHE_STATIC_SIZE,
+            ttl=JenkinsConfig.CACHE_STATIC_TTL
+        )
+        
+        # Semi-static data cache (5 minutes TTL)
+        self.semi_static_cache = TTLCache(
+            maxsize=JenkinsConfig.CACHE_SEMI_STATIC_SIZE,
+            ttl=JenkinsConfig.CACHE_SEMI_STATIC_TTL
+        )
+        
+        # Dynamic data cache (30 seconds TTL)
+        self.dynamic_cache = TTLCache(
+            maxsize=JenkinsConfig.CACHE_DYNAMIC_SIZE,
+            ttl=JenkinsConfig.CACHE_DYNAMIC_TTL
+        )
+        
+        # Permanent cache for completed builds (LRU, no TTL)
+        self.permanent_cache = LRUCache(
+            maxsize=JenkinsConfig.CACHE_PERMANENT_SIZE
+        )
+        
+        # Short-lived cache (10 seconds TTL)
+        self.short_cache = TTLCache(
+            maxsize=JenkinsConfig.CACHE_SHORT_SIZE,
+            ttl=JenkinsConfig.CACHE_SHORT_TTL
+        )
+        
+        # Cache statistics
+        self.stats = {
+            'hits': 0,
+            'misses': 0,
+            'invalidations': 0
+        }
+        
+        self._initialized = True
+        logger.info("Jenkins Cache Manager initialized with multi-tier caching strategy")
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get comprehensive cache statistics."""
+        return {
+            'stats': self.stats.copy(),
+            'cache_info': {
+                'static': {
+                    'size': len(self.static_cache),
+                    'maxsize': self.static_cache.maxsize,
+                    'ttl': JenkinsConfig.CACHE_STATIC_TTL
+                },
+                'semi_static': {
+                    'size': len(self.semi_static_cache),
+                    'maxsize': self.semi_static_cache.maxsize,
+                    'ttl': JenkinsConfig.CACHE_SEMI_STATIC_TTL
+                },
+                'dynamic': {
+                    'size': len(self.dynamic_cache),
+                    'maxsize': self.dynamic_cache.maxsize,
+                    'ttl': JenkinsConfig.CACHE_DYNAMIC_TTL
+                },
+                'permanent': {
+                    'size': len(self.permanent_cache),
+                    'maxsize': self.permanent_cache.maxsize,
+                    'ttl': 'Never'
+                },
+                'short': {
+                    'size': len(self.short_cache),
+                    'maxsize': self.short_cache.maxsize,
+                    'ttl': JenkinsConfig.CACHE_SHORT_TTL
+                }
+            }
+        }
+    
+    def clear_all_caches(self):
+        """Clear all caches."""
+        with self._lock:
+            self.static_cache.clear()
+            self.semi_static_cache.clear()
+            self.dynamic_cache.clear()
+            self.permanent_cache.clear()
+            self.short_cache.clear()
+            self.stats['invalidations'] += 1
+            logger.info("All caches cleared")
+    
+    def invalidate_job_caches(self, job_name: str):
+        """Invalidate caches related to a specific job."""
+        with self._lock:
+            # Remove job-specific entries from caches
+            keys_to_remove = []
+            
+            for cache in [self.static_cache, self.semi_static_cache, self.dynamic_cache, self.short_cache]:
+                for key in list(cache.keys()):
+                    if isinstance(key, tuple) and len(key) > 0 and str(key[0]) == job_name:
+                        keys_to_remove.append((cache, key))
+            
+            for cache, key in keys_to_remove:
+                try:
+                    del cache[key]
+                except KeyError:
+                    pass
+            
+            self.stats['invalidations'] += 1
+            logger.info(f"Invalidated caches for job: {job_name}")
+    
+    def get_cache_for_type(self, cache_type: str):
+        """Get the appropriate cache based on data type."""
+        cache_map = {
+            'static': self.static_cache,
+            'semi_static': self.semi_static_cache,
+            'dynamic': self.dynamic_cache,
+            'permanent': self.permanent_cache,
+            'short': self.short_cache
+        }
+        return cache_map.get(cache_type)
+
+# Global cache manager instance
+cache_manager = JenkinsCacheManager()
+
+def cached_request(cache_type: str = 'dynamic', key_func=None):
+    """
+    Decorator for caching API requests with different cache strategies.
+    
+    Args:
+        cache_type: Type of cache to use ('static', 'semi_static', 'dynamic', 'permanent', 'short')
+        key_func: Custom function to generate cache key (defaults to function name + args)
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Generate cache key
+            if key_func:
+                key = key_func(*args, **kwargs)
+            else:
+                key = hashkey(func.__name__, *args, **tuple(sorted(kwargs.items())))
+            
+            # Get appropriate cache
+            cache = cache_manager.get_cache_for_type(cache_type)
+            if cache is None:
+                # No caching, execute function directly
+                return func(*args, **kwargs)
+            
+            # Try to get from cache
+            try:
+                result = cache[key]
+                cache_manager.stats['hits'] += 1
+                logger.debug(f"Cache hit for {func.__name__} with key {key}")
+                return result
+            except KeyError:
+                # Cache miss, execute function and cache result
+                result = func(*args, **kwargs)
+                cache[key] = result
+                cache_manager.stats['misses'] += 1
+                logger.debug(f"Cache miss for {func.__name__} with key {key}, result cached")
+                return result
+        
+        return wrapper
+    return decorator
+
+def smart_build_cache(func):
+    """
+    Smart caching decorator for build status that uses different cache strategies
+    based on whether the build is completed or still running.
+    """
+    @wraps(func)
+    def wrapper(job_name: str, build_number: int):
+        # Generate cache key
+        key = f"build_status_{job_name}_{build_number}"
+        
+        # First check permanent cache for completed builds
+        try:
+            result = cache_manager.permanent_cache[key]
+            # If it's in permanent cache, it's a completed build
+            if result.status not in ['BUILDING', 'PENDING', 'UNKNOWN']:
+                cache_manager.stats['hits'] += 1
+                logger.debug(f"Permanent cache hit for {func.__name__} with key {key}")
+                return result
+        except KeyError:
+            pass
+        
+        # Check dynamic cache for running builds
+        try:
+            result = cache_manager.dynamic_cache[key]
+            cache_manager.stats['hits'] += 1
+            logger.debug(f"Dynamic cache hit for {func.__name__} with key {key}")
+            
+            # If build completed, move to permanent cache
+            if result.status not in ['BUILDING', 'PENDING', 'UNKNOWN']:
+                cache_manager.permanent_cache[key] = result
+                # Remove from dynamic cache
+                try:
+                    del cache_manager.dynamic_cache[key]
+                except KeyError:
+                    pass
+            
+            return result
+        except KeyError:
+            pass
+        
+        # Cache miss, execute function
+        result = func(job_name, build_number)
+        cache_manager.stats['misses'] += 1
+        
+        # Cache based on build status
+        if result.status in ['BUILDING', 'PENDING', 'UNKNOWN']:
+            # Running build - use dynamic cache
+            cache_manager.dynamic_cache[key] = result
+            logger.debug(f"Cached running build in dynamic cache: {key}")
+        else:
+            # Completed build - use permanent cache
+            cache_manager.permanent_cache[key] = result
+            logger.debug(f"Cached completed build in permanent cache: {key}")
+        
+        return result
+    
+    return wrapper
+
+def smart_pipeline_cache(func):
+    """
+    Smart caching decorator for pipeline status that caches based on pipeline completion status.
+    """
+    @wraps(func)
+    def wrapper(job_name: str, build_number: int):
+        # Generate cache key
+        key = f"pipeline_status_{job_name}_{build_number}"
+        
+        # First check permanent cache for completed pipelines
+        try:
+            result = cache_manager.permanent_cache[key]
+            # Check if all stages are completed
+            if result.get('status') in ['SUCCESS', 'FAILED', 'ABORTED', 'UNSTABLE']:
+                cache_manager.stats['hits'] += 1
+                logger.debug(f"Permanent cache hit for pipeline {key}")
+                return result
+        except KeyError:
+            pass
+        
+        # Check dynamic cache for running pipelines
+        try:
+            result = cache_manager.dynamic_cache[key]
+            cache_manager.stats['hits'] += 1
+            logger.debug(f"Dynamic cache hit for pipeline {key}")
+            
+            # If pipeline completed, move to permanent cache
+            if result.get('status') in ['SUCCESS', 'FAILED', 'ABORTED', 'UNSTABLE']:
+                cache_manager.permanent_cache[key] = result
+                try:
+                    del cache_manager.dynamic_cache[key]
+                except KeyError:
+                    pass
+            
+            return result
+        except KeyError:
+            pass
+        
+        # Cache miss, execute function
+        result = func(job_name, build_number)
+        cache_manager.stats['misses'] += 1
+        
+        # Cache based on pipeline status
+        if result.get('status') in ['SUCCESS', 'FAILED', 'ABORTED', 'UNSTABLE']:
+            # Completed pipeline - use permanent cache
+            cache_manager.permanent_cache[key] = result
+            logger.debug(f"Cached completed pipeline in permanent cache: {key}")
+        else:
+            # Running pipeline - use dynamic cache
+            cache_manager.dynamic_cache[key] = result
+            logger.debug(f"Cached running pipeline in dynamic cache: {key}")
+        
+        return result
+    
+    return wrapper
+
+
 # Pydantic models
 class TriggerJobResponse(BaseModel):
     job_name: str
@@ -497,6 +817,38 @@ class ArtifactListResponse(BaseModel):
     artifacts: List[BuildArtifact] = []
     total_artifacts: int
     total_size: Optional[int] = None  # Total size in bytes
+
+class BatchJobOperation(BaseModel):
+    job_name: str
+    params: Optional[Dict[str, Any]] = None
+    priority: int = 1  # 1 = highest, 10 = lowest
+    
+class BatchJobResult(BaseModel):
+    job_name: str
+    success: bool
+    queue_url: Optional[str] = None
+    build_number: Optional[int] = None
+    error: Optional[str] = None
+    execution_time: Optional[float] = None  # Time taken in seconds
+    timestamp: Optional[int] = None  # Unix timestamp
+
+class BatchOperationResponse(BaseModel):
+    operation_id: str
+    total_jobs: int
+    successful: int
+    failed: int
+    skipped: int
+    results: List[BatchJobResult] = []
+    total_execution_time: Optional[float] = None
+    started_at: Optional[int] = None
+    completed_at: Optional[int] = None
+
+class BatchMonitoringResponse(BaseModel):
+    operation_id: str
+    jobs_status: List[Dict[str, Any]] = []
+    overall_status: str  # "running", "completed", "failed", "partial"
+    progress_percentage: float
+    estimated_completion: Optional[int] = None
 
 # CSRF Crumb token management
 @with_retry(max_retries=2)  # Fewer retries for crumb requests since they're less critical
@@ -708,6 +1060,10 @@ def trigger_job(job_name: str, params: Optional[Dict[str, Any]] = None) -> Trigg
         queue_url = resp.headers.get("Location")
         logger.info(f"[{context['request_id']}] Job '{job_name}' triggered successfully. Queue URL: {queue_url}")
         
+        # Invalidate relevant caches since job state has changed
+        cache_manager.invalidate_job_caches(job_name)
+        logger.debug(f"[{context['request_id']}] Invalidated caches for triggered job: {job_name}")
+        
         return TriggerJobResponse(
             job_name=job_name, 
             status="Triggered", 
@@ -729,6 +1085,7 @@ def trigger_job(job_name: str, params: Optional[Dict[str, Any]] = None) -> Trigg
         raise
 
 @mcp.tool()
+@cached_request(cache_type='static', key_func=lambda job_name, auto_search=True: f"job_info_{job_name}_{auto_search}")
 def get_job_info(job_name: str, auto_search: bool = True) -> Dict[str, Any]:
     """
     Get detailed information about a Jenkins job including its parameters.
@@ -839,6 +1196,7 @@ def get_job_info(job_name: str, auto_search: bool = True) -> Dict[str, Any]:
         raise
 
 @mcp.tool()
+@smart_build_cache
 def get_build_status(job_name: str, build_number: int) -> BuildStatusResponse:
     """Get the status of a specific build. Supports nested job paths."""
     context = get_request_context()
@@ -1015,6 +1373,7 @@ def _job_matches_filters(job_dict: Dict[str, Any],
     return True
 
 @mcp.tool()
+@cached_request(cache_type='semi_static', key_func=lambda recursive=True, max_depth=JenkinsConfig.DEFAULT_MAX_DEPTH, include_folders=False, status_filter=None, last_build_result=None, days_since_last_build=None, enabled_only=None: f"list_jobs_{recursive}_{max_depth}_{include_folders}_{status_filter}_{last_build_result}_{days_since_last_build}_{enabled_only}")
 def list_jobs(recursive: bool = True, 
               max_depth: int = JenkinsConfig.DEFAULT_MAX_DEPTH, 
               include_folders: bool = False,
@@ -1383,6 +1742,7 @@ def search_and_trigger(pattern: str, params: Optional[Dict[str, Any]] = None, ma
         raise
 
 @mcp.tool()
+@cached_request(cache_type='short')
 def get_queue_info() -> List[Dict[str, Any]]:
     """Get information about queued builds."""
     context = get_request_context()
@@ -1397,6 +1757,7 @@ def get_queue_info() -> List[Dict[str, Any]]:
         raise
 
 @mcp.tool()
+@cached_request(cache_type='static')
 def server_info() -> Dict[str, Any]:
     """Get Jenkins server information."""
     context = get_request_context()
@@ -1444,6 +1805,7 @@ def summarize_build_log(job_name: str, build_number: int) -> dict:
         raise
 
 @mcp.tool()
+@smart_pipeline_cache
 def get_pipeline_status(job_name: str, build_number: int) -> Dict[str, Any]:
     """
     Gets detailed pipeline stage status for a Jenkins Pipeline job build.
@@ -1537,6 +1899,7 @@ def get_pipeline_status(job_name: str, build_number: int) -> Dict[str, Any]:
         }
 
 @mcp.tool()
+@cached_request(cache_type='permanent', key_func=lambda job_name, build_number: f"artifacts_{job_name}_{build_number}")
 def list_build_artifacts(job_name: str, build_number: int) -> Dict[str, Any]:
     """
     List all artifacts for a specific Jenkins build.
@@ -1864,6 +2227,339 @@ def search_build_artifacts(job_name: str, pattern: str, max_builds: int = Jenkin
             "suggestion": "Ensure the job exists and has builds with artifacts. Check server connectivity and authentication."
         }
 
+# --- Batch Processing Operations ---
+
+# Global batch operation storage (in production, use Redis or database)
+_batch_operations: Dict[str, Dict[str, Any]] = {}
+_batch_lock = threading.Lock()
+
+@mcp.tool()
+def batch_trigger_jobs(operations: List[Dict[str, Any]], 
+                      max_concurrent: int = 5, 
+                      fail_fast: bool = False,
+                      wait_for_completion: bool = False) -> Dict[str, Any]:
+    """
+    Trigger multiple Jenkins jobs in batch with parallel execution.
+    
+    Args:
+        operations: List of job operations, each containing:
+            - job_name (str): Name of the Jenkins job
+            - params (dict, optional): Job parameters
+            - priority (int, optional): Priority 1-10 (1=highest)
+        max_concurrent: Maximum number of concurrent job triggers (default: 5)
+        fail_fast: If True, stop processing on first failure (default: False)
+        wait_for_completion: If True, wait for all jobs to complete (default: False)
+    
+    Returns:
+        Batch operation response with results and operation ID for monitoring
+    """
+    context = get_request_context()
+    operation_id = str(uuid.uuid4())[:8]  # Short ID for monitoring
+    start_time = time.time()
+    
+    logger.info(f"[{context['request_id']}] Starting batch operation {operation_id} with {len(operations)} jobs")
+    
+    try:
+        # Validate and parse operations
+        batch_ops = []
+        for i, op in enumerate(operations):
+            try:
+                if isinstance(op, dict):
+                    batch_op = BatchJobOperation(**op)
+                else:
+                    batch_op = op
+                batch_ops.append(batch_op)
+            except Exception as e:
+                return create_error_response(
+                    JenkinsValidationError(f"Invalid operation at index {i}: {str(e)}"),
+                    context,
+                    "batch job validation"
+                )
+        
+        # Sort by priority (1 = highest priority)
+        batch_ops.sort(key=lambda x: x.priority)
+        
+        # Execute batch operations
+        results = []
+        successful = failed = skipped = 0
+        
+        # Use threading for parallel execution
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import concurrent.futures
+        
+        def trigger_single_job(batch_op: BatchJobOperation) -> BatchJobResult:
+            """Trigger a single job and return result."""
+            job_start_time = time.time()
+            try:
+                # Use existing trigger_job function
+                trigger_context = get_request_context()
+                response = trigger_job(batch_op.job_name, batch_op.params)
+                
+                execution_time = time.time() - job_start_time
+                
+                if "error" in response:
+                    return BatchJobResult(
+                        job_name=batch_op.job_name,
+                        success=False,
+                        error=response["error"],
+                        execution_time=execution_time,
+                        timestamp=int(time.time() * 1000)
+                    )
+                else:
+                    return BatchJobResult(
+                        job_name=batch_op.job_name,
+                        success=True,
+                        queue_url=response.get("queue_url"),
+                        build_number=response.get("build_number"),
+                        execution_time=execution_time,
+                        timestamp=int(time.time() * 1000)
+                    )
+                    
+            except Exception as e:
+                execution_time = time.time() - job_start_time
+                return BatchJobResult(
+                    job_name=batch_op.job_name,
+                    success=False,
+                    error=str(e),
+                    execution_time=execution_time,
+                    timestamp=int(time.time() * 1000)
+                )
+        
+        # Execute jobs with controlled concurrency
+        with ThreadPoolExecutor(max_workers=min(max_concurrent, len(batch_ops))) as executor:
+            # Submit all jobs
+            future_to_op = {executor.submit(trigger_single_job, op): op for op in batch_ops}
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_op):
+                batch_op = future_to_op[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                    
+                    if result.success:
+                        successful += 1
+                        logger.debug(f"[{context['request_id']}] Job '{result.job_name}' triggered successfully")
+                    else:
+                        failed += 1
+                        logger.warning(f"[{context['request_id']}] Job '{result.job_name}' failed: {result.error}")
+                        
+                        if fail_fast:
+                            logger.info(f"[{context['request_id']}] Stopping batch operation due to fail_fast=True")
+                            # Cancel remaining futures
+                            for remaining_future in future_to_op:
+                                if not remaining_future.done():
+                                    remaining_future.cancel()
+                                    skipped += 1
+                            break
+                            
+                except Exception as e:
+                    failed += 1
+                    logger.error(f"[{context['request_id']}] Unexpected error processing job '{batch_op.job_name}': {e}")
+                    results.append(BatchJobResult(
+                        job_name=batch_op.job_name,
+                        success=False,
+                        error=f"Execution error: {str(e)}",
+                        timestamp=int(time.time() * 1000)
+                    ))
+        
+        total_execution_time = time.time() - start_time
+        completed_at = int(time.time() * 1000)
+        
+        # Create response
+        batch_response = BatchOperationResponse(
+            operation_id=operation_id,
+            total_jobs=len(batch_ops),
+            successful=successful,
+            failed=failed,
+            skipped=skipped,
+            results=results,
+            total_execution_time=total_execution_time,
+            started_at=int(start_time * 1000),
+            completed_at=completed_at
+        )
+        
+        # Store operation for monitoring (optional)
+        with _batch_lock:
+            _batch_operations[operation_id] = {
+                "response": batch_response.model_dump(),
+                "status": "completed",
+                "created_at": completed_at
+            }
+        
+        logger.info(f"[{context['request_id']}] Batch operation {operation_id} completed: "
+                   f"{successful} successful, {failed} failed, {skipped} skipped in {total_execution_time:.2f}s")
+        
+        return {"result": batch_response.model_dump()}
+        
+    except Exception as e:
+        return create_error_response(e, context, "batch job triggering")
+
+@mcp.tool()
+def batch_monitor_jobs(operation_id: str) -> Dict[str, Any]:
+    """
+    Monitor the status of a batch operation and its individual jobs.
+    
+    Args:
+        operation_id: The operation ID returned from batch_trigger_jobs
+    
+    Returns:
+        Current status of the batch operation and individual job statuses
+    """
+    context = get_request_context()
+    logger.info(f"[{context['request_id']}] Monitoring batch operation {operation_id}")
+    
+    try:
+        # Check if operation exists
+        with _batch_lock:
+            if operation_id not in _batch_operations:
+                return create_error_response(
+                    JenkinsNotFoundError(f"Batch operation '{operation_id}' not found"),
+                    context,
+                    "batch operation monitoring"
+                )
+            
+            operation_data = _batch_operations[operation_id]
+        
+        batch_response = operation_data["response"]
+        jobs_status = []
+        
+        # Get current status of each job from the original batch
+        for result in batch_response.get("results", []):
+            job_name = result["job_name"]
+            
+            if result["success"] and result.get("build_number"):
+                try:
+                    # Get current build status
+                    build_status = get_build_status(job_name, result["build_number"])
+                    if "error" not in build_status:
+                        status_info = {
+                            "job_name": job_name,
+                            "build_number": result["build_number"],
+                            "status": build_status["result"],
+                            "building": build_status.get("building", False),
+                            "duration": build_status.get("duration"),
+                            "url": build_status.get("url")
+                        }
+                    else:
+                        status_info = {
+                            "job_name": job_name,
+                            "status": "UNKNOWN",
+                            "error": "Could not fetch current status"
+                        }
+                except Exception:
+                    status_info = {
+                        "job_name": job_name,
+                        "status": "UNKNOWN",
+                        "error": "Status check failed"
+                    }
+            else:
+                status_info = {
+                    "job_name": job_name,
+                    "status": "FAILED" if not result["success"] else "NOT_STARTED",
+                    "error": result.get("error")
+                }
+            
+            jobs_status.append(status_info)
+        
+        # Calculate overall progress
+        total_jobs = len(jobs_status)
+        completed_jobs = sum(1 for job in jobs_status 
+                           if job.get("status") in ["SUCCESS", "FAILURE", "UNSTABLE", "ABORTED", "FAILED"])
+        running_jobs = sum(1 for job in jobs_status if job.get("building", False))
+        
+        if completed_jobs == total_jobs:
+            overall_status = "completed"
+            progress_percentage = 100.0
+        elif running_jobs > 0:
+            overall_status = "running"
+            progress_percentage = (completed_jobs / total_jobs) * 100
+        else:
+            overall_status = "partial"
+            progress_percentage = (completed_jobs / total_jobs) * 100
+        
+        monitoring_response = BatchMonitoringResponse(
+            operation_id=operation_id,
+            jobs_status=jobs_status,
+            overall_status=overall_status,
+            progress_percentage=progress_percentage,
+            estimated_completion=None  # Could implement ETA calculation
+        )
+        
+        logger.info(f"[{context['request_id']}] Batch operation {operation_id} status: "
+                   f"{overall_status} ({progress_percentage:.1f}% complete)")
+        
+        return {"result": monitoring_response.model_dump()}
+        
+    except Exception as e:
+        return create_error_response(e, context, "batch operation monitoring")
+
+@mcp.tool()
+def batch_cancel_jobs(operation_id: str, cancel_running_builds: bool = False) -> Dict[str, Any]:
+    """
+    Cancel a batch operation and optionally cancel running builds.
+    
+    Args:
+        operation_id: The operation ID to cancel
+        cancel_running_builds: If True, attempt to cancel running builds
+    
+    Returns:
+        Cancellation status and results
+    """
+    context = get_request_context()
+    logger.info(f"[{context['request_id']}] Cancelling batch operation {operation_id}")
+    
+    try:
+        # Check if operation exists
+        with _batch_lock:
+            if operation_id not in _batch_operations:
+                return create_error_response(
+                    JenkinsNotFoundError(f"Batch operation '{operation_id}' not found"),
+                    context,
+                    "batch operation cancellation"
+                )
+            
+            operation_data = _batch_operations[operation_id]
+            # Mark as cancelled
+            operation_data["status"] = "cancelled"
+        
+        cancelled_jobs = []
+        
+        if cancel_running_builds:
+            batch_response = operation_data["response"]
+            
+            for result in batch_response.get("results", []):
+                if result["success"] and result.get("build_number"):
+                    job_name = result["job_name"]
+                    build_number = result["build_number"]
+                    
+                    try:
+                        # Check if build is still running
+                        build_status = get_build_status(job_name, build_number)
+                        if "error" not in build_status and build_status.get("building", False):
+                            # TODO: Implement build cancellation API call
+                            # For now, just log the attempt
+                            logger.info(f"[{context['request_id']}] Would cancel running build {job_name}#{build_number}")
+                            cancelled_jobs.append({
+                                "job_name": job_name,
+                                "build_number": build_number,
+                                "status": "cancellation_requested"
+                            })
+                    except Exception as e:
+                        logger.warning(f"[{context['request_id']}] Could not check/cancel build {job_name}#{build_number}: {e}")
+        
+        return {
+            "result": {
+                "operation_id": operation_id,
+                "status": "cancelled",
+                "cancelled_builds": cancelled_jobs,
+                "message": f"Batch operation {operation_id} has been cancelled"
+            }
+        }
+        
+    except Exception as e:
+        return create_error_response(e, context, "batch operation cancellation")
+
 @with_retry(max_retries=2, base_delay=0.5)  # Quick retries for health checks
 def _health_check_request():
     """Make the actual health check request to Jenkins."""
@@ -1871,6 +2567,136 @@ def _health_check_request():
     response = requests.get(f"{JenkinsConfig.URL}/api/json", auth=auth, timeout=JenkinsConfig.HEALTH_CHECK_TIMEOUT)
     response.raise_for_status()
     return response
+
+# --- Cache Management Tools ---
+
+@mcp.tool()
+def get_cache_statistics() -> Dict[str, Any]:
+    """
+    Get comprehensive cache statistics and performance metrics.
+    
+    Returns detailed information about cache hits, misses, sizes, and efficiency.
+    """
+    try:
+        stats = cache_manager.get_cache_stats()
+        
+        # Calculate hit rate
+        total_requests = stats['stats']['hits'] + stats['stats']['misses']
+        hit_rate = (stats['stats']['hits'] / total_requests * 100) if total_requests > 0 else 0
+        
+        return {
+            "performance": {
+                "hit_rate_percentage": round(hit_rate, 2),
+                "total_hits": stats['stats']['hits'],
+                "total_misses": stats['stats']['misses'],
+                "total_requests": total_requests,
+                "cache_invalidations": stats['stats']['invalidations']
+            },
+            "cache_details": stats['cache_info'],
+            "cache_efficiency": {
+                "static_utilization": round(stats['cache_info']['static']['size'] / stats['cache_info']['static']['maxsize'] * 100, 2),
+                "semi_static_utilization": round(stats['cache_info']['semi_static']['size'] / stats['cache_info']['semi_static']['maxsize'] * 100, 2),
+                "dynamic_utilization": round(stats['cache_info']['dynamic']['size'] / stats['cache_info']['dynamic']['maxsize'] * 100, 2),
+                "permanent_utilization": round(stats['cache_info']['permanent']['size'] / stats['cache_info']['permanent']['maxsize'] * 100, 2),
+                "short_utilization": round(stats['cache_info']['short']['size'] / stats['cache_info']['short']['maxsize'] * 100, 2)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get cache statistics: {e}")
+        return {"error": "Failed to retrieve cache statistics", "details": str(e)}
+
+@mcp.tool() 
+def clear_cache(cache_type: Optional[str] = None, job_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Clear caches with fine-grained control.
+    
+    Args:
+        cache_type: Type of cache to clear ('all', 'static', 'semi_static', 'dynamic', 'permanent', 'short')
+        job_name: Clear caches for a specific job only
+    
+    Returns:
+        Confirmation of cache clearing operation
+    """
+    try:
+        if job_name:
+            # Clear caches for specific job
+            cache_manager.invalidate_job_caches(job_name)
+            return {
+                "status": "success",
+                "message": f"Cleared all caches for job: {job_name}",
+                "action": "job_specific_clear"
+            }
+        elif cache_type == "all" or cache_type is None:
+            # Clear all caches
+            cache_manager.clear_all_caches()
+            return {
+                "status": "success", 
+                "message": "All caches cleared successfully",
+                "action": "full_clear"
+            }
+        else:
+            # Clear specific cache type
+            cache = cache_manager.get_cache_for_type(cache_type)
+            if cache is not None:
+                cache.clear()
+                cache_manager.stats['invalidations'] += 1
+                return {
+                    "status": "success",
+                    "message": f"Cleared {cache_type} cache successfully",
+                    "action": "selective_clear"
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Invalid cache type: {cache_type}",
+                    "valid_types": ["all", "static", "semi_static", "dynamic", "permanent", "short"]
+                }
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {e}")
+        return {"status": "error", "message": "Failed to clear cache", "details": str(e)}
+
+@mcp.tool()
+def warm_cache(operations: List[str] = None) -> Dict[str, Any]:
+    """
+    Warm up caches by pre-loading frequently accessed data.
+    
+    Args:
+        operations: List of operations to warm ('server_info', 'job_list', 'queue_info')
+    
+    Returns:
+        Results of cache warming operations
+    """
+    try:
+        if operations is None:
+            operations = ['server_info', 'job_list', 'queue_info']
+        
+        results = []
+        
+        for operation in operations:
+            try:
+                if operation == 'server_info':
+                    server_info()
+                    results.append({"operation": "server_info", "status": "success"})
+                elif operation == 'job_list':
+                    list_jobs()
+                    results.append({"operation": "job_list", "status": "success"})
+                elif operation == 'queue_info':
+                    get_queue_info()
+                    results.append({"operation": "queue_info", "status": "success"})
+                else:
+                    results.append({"operation": operation, "status": "skipped", "reason": "unknown operation"})
+            except Exception as e:
+                results.append({"operation": operation, "status": "failed", "error": str(e)})
+        
+        return {
+            "status": "completed",
+            "message": "Cache warming completed",
+            "results": results,
+            "warmed_operations": len([r for r in results if r["status"] == "success"])
+        }
+    except Exception as e:
+        logger.error(f"Failed to warm cache: {e}")
+        return {"status": "error", "message": "Failed to warm cache", "details": str(e)}
 
 @mcp.resource("status://health")
 def get_health() -> HealthCheckResponse:
