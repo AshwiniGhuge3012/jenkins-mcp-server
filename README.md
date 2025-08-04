@@ -252,6 +252,11 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 
 ## Changelog
 
+### v1.0.6
+- Fixed Python server to respect transport mode (stdio/http) passed from Node.js wrapper
+- Added proper transport argument parsing in Python server
+- Default transport is now stdio (no port binding required)
+
 ### v1.0.5
 - Fixed missing `fastapi` dependency in Python requirements
 - Updated dependency installation to include all required packages

@@ -145,6 +145,8 @@ def jenkins_request(method, endpoint, context: Dict[str, Any], is_job_specific: 
 
 # Initialize FastMCP
 parser = argparse.ArgumentParser(description="Jenkins MCP Server", add_help=False)
+parser.add_argument("--transport", type=str, default="stdio",
+                    help="Transport type (stdio|streamable-http) [default: stdio]")
 parser.add_argument("--port", type=str, default=os.getenv("MCP_PORT", "8010"),
                     help="Port for the MCP server (default: 8010 or from MCP_PORT env var)")
 args, unknown = parser.parse_known_args()
@@ -391,6 +393,18 @@ def get_health() -> HealthCheckResponse:
         return HealthCheckResponse(status="error", details=f"Failed to connect to Jenkins: {str(e)}")
 
 if __name__ == "__main__":
-    logger.info(f"Starting Jenkins MCP server on port {args.port}")
-    sys.argv = [sys.argv[0]] + unknown
-    mcp.run(transport="streamable-http")
+    try:
+        if args.transport == "stdio":
+            logger.info("Starting Jenkins MCP server in STDIO mode")
+            sys.argv = [sys.argv[0]] + unknown
+            mcp.run()
+        else:
+            logger.info(f"Starting Jenkins MCP server in {args.transport} mode on port {args.port}")
+            sys.argv = [sys.argv[0]] + unknown
+            mcp.run(transport=args.transport)
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Failed to start Jenkins MCP server: {e}")
+        sys.exit(1)
