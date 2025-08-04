@@ -6,8 +6,12 @@ An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger
 
 - **Job Management**: Trigger, list, and get detailed information about Jenkins jobs.
 - **Build Status**: Check the status of specific builds and retrieve console logs.
+- **Pipeline Support**: Get detailed stage-by-stage pipeline execution status.
+- **Artifact Management**: List, download, and search build artifacts across builds.
+- **Advanced Filtering**: Filter jobs by status, build results, dates, and more with regex support.
 - **Queue Management**: View items currently in the build queue.
 - **Server Information**: Get basic information about the connected Jenkins server.
+- **Retry Mechanisms**: Built-in exponential backoff retry logic for improved reliability.
 - **LLM Integration**: Includes prompts and configurations for summarizing build logs (demonstration).
 - **Transport Support**: Supports both STDIO and Streamable HTTP transports.
 - **Input Validation**: Uses Pydantic for robust input validation and error handling.
@@ -49,6 +53,12 @@ An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger
     JENKINS_USER="your-username"
     JENKINS_API_TOKEN="your-api-token"
     MCP_PORT=8010
+    
+    # Optional: Retry mechanism configuration
+    JENKINS_MAX_RETRIES=3
+    JENKINS_RETRY_BASE_DELAY=1.0
+    JENKINS_RETRY_MAX_DELAY=60.0
+    JENKINS_RETRY_BACKOFF_MULTIPLIER=2.0
     ```
 
 ## Usage
@@ -101,9 +111,29 @@ Here is a list of the tools exposed by this MCP server:
 - **Returns**: The console log text and information about whether more data is available.
 
 ### `list_jobs`
-- **Description**: Lists all available jobs on the Jenkins server.
-- **Parameters**: None
-- **Returns**: A list of job names.
+- **Description**: Lists all available jobs on the Jenkins server with advanced filtering capabilities.
+- **Parameters**:
+    - `recursive` (boolean, optional): If True, recursively traverse folders (default: True)
+    - `max_depth` (integer, optional): Maximum depth to recurse (default: 10)
+    - `include_folders` (boolean, optional): Whether to include folder items (default: False)
+    - `status_filter` (string, optional): Filter by job status: "building", "queued", "idle", "disabled"
+    - `last_build_result` (string, optional): Filter by last build result: "SUCCESS", "FAILURE", "UNSTABLE", "ABORTED", "NOT_BUILT"
+    - `days_since_last_build` (integer, optional): Only jobs built within the last N days
+    - `enabled_only` (boolean, optional): If True, only enabled jobs; if False, only disabled jobs
+- **Returns**: A list of jobs with enhanced metadata including build status and timestamps.
+
+### `search_jobs`
+- **Description**: Search for Jenkins jobs using pattern matching with advanced filtering.
+- **Parameters**:
+    - `pattern` (string): Pattern to match job names (supports wildcards like 'build*', '*test*', etc.)
+    - `job_type` (string, optional): Filter by type - "job", "folder", or "all" (default: "job")
+    - `max_depth` (integer, optional): Maximum depth to search (default: 10)
+    - `use_regex` (boolean, optional): If True, treat pattern as regex instead of wildcard (default: False)
+    - `status_filter` (string, optional): Filter by job status: "building", "queued", "idle", "disabled"
+    - `last_build_result` (string, optional): Filter by last build result: "SUCCESS", "FAILURE", "UNSTABLE", "ABORTED", "NOT_BUILT"
+    - `days_since_last_build` (integer, optional): Only jobs built within the last N days
+    - `enabled_only` (boolean, optional): If True, only enabled jobs; if False, only disabled jobs
+- **Returns**: A list of matching jobs with enhanced metadata and full paths.
 
 ### `get_queue_info`
 - **Description**: Gets information about builds currently in the queue.
@@ -114,6 +144,38 @@ Here is a list of the tools exposed by this MCP server:
 - **Description**: Gets basic information about the Jenkins server.
 - **Parameters**: None
 - **Returns**: The Jenkins version and URL.
+
+### `get_pipeline_status`
+- **Description**: Gets detailed pipeline stage status for Jenkins Pipeline job builds.
+- **Parameters**:
+    - `job_name` (string): The name of the Jenkins Pipeline job.
+    - `build_number` (integer): The build number.
+- **Returns**: Pipeline execution details including stage-by-stage status, timing, duration, and logs.
+
+### `list_build_artifacts`
+- **Description**: List all artifacts for a specific Jenkins build.
+- **Parameters**:
+    - `job_name` (string): Name of the Jenkins job.
+    - `build_number` (integer): Build number to list artifacts for.
+- **Returns**: Information about all artifacts including filenames, sizes, and download URLs.
+
+### `download_build_artifact`
+- **Description**: Download a specific build artifact content (text-based artifacts only for safety).
+- **Parameters**:
+    - `job_name` (string): Name of the Jenkins job.
+    - `build_number` (integer): Build number containing the artifact.
+    - `artifact_path` (string): Relative path to the artifact (from list_build_artifacts).
+    - `max_size_mb` (integer, optional): Maximum file size to download in MB (default: 50MB).
+- **Returns**: Artifact content (for text files) or download information.
+
+### `search_build_artifacts`
+- **Description**: Search for artifacts across recent builds of a job using pattern matching.
+- **Parameters**:
+    - `job_name` (string): Name of the Jenkins job to search.
+    - `pattern` (string): Pattern to match artifact names (wildcards or regex).
+    - `max_builds` (integer, optional): Maximum number of recent builds to search (default: 10).
+    - `use_regex` (boolean, optional): If True, treat pattern as regex instead of wildcard (default: False).
+- **Returns**: List of matching artifacts across builds with their metadata.
 
 ### `summarize_build_log`
 - **Description**: (Demonstration) Summarizes a build log using a pre-configured LLM prompt.
