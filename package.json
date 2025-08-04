@@ -1,0 +1,48 @@
+{
+  "name": "@ashwini/jenkins-mcp-server",
+  "version": "1.0.0",
+  "description": "An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.",
+  "main": "bin/jenkins-mcp.js",
+  "bin": {
+    "jenkins-mcp": "./bin/jenkins-mcp.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "chmod +x bin/jenkins-mcp.js"
+  },
+  "keywords": [
+    "mcp",
+    "jenkins",
+    "claude",
+    "ci-cd",
+    "automation",
+    "build",
+    "deployment"
+  ],
+  "author": "Ashwini Ghuge <your-email@example.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AshwiniGhuge3012/jenkins-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AshwiniGhuge3012/jenkins-mcp-server/issues"
+  },
+  "homepage": "https://github.com/AshwiniGhuge3012/jenkins-mcp-server#readme",
+  "files": [
+    "bin/",
+    "python/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "python3": ">=3.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

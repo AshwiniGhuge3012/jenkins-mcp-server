@@ -1,146 +1,259 @@
-# Jenkins MCP Server.
+# Jenkins MCP Server
 
-An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.
+An MCP (Model Context Protocol) server for interacting with a Jenkins CI/CD server. This server allows you to trigger jobs, check build statuses, and manage your Jenkins instance through Claude Desktop or other MCP clients.
 
 ## Features
 
-- **Job Management**: Trigger, list, and get detailed information about Jenkins jobs.
-- **Build Status**: Check the status of specific builds and retrieve console logs.
-- **Queue Management**: View items currently in the build queue.
-- **Server Information**: Get basic information about the connected Jenkins server.
-- **LLM Integration**: Includes prompts and configurations for summarizing build logs (demonstration).
-- **Transport Support**: Supports both STDIO and Streamable HTTP transports.
-- **Input Validation**: Uses Pydantic for robust input validation and error handling.
-- **Compatibility**: Fully compatible with the MCP Gateway.
+- **Job Management**: Trigger, list, and get detailed information about Jenkins jobs
+- **Build Status**: Check the status of specific builds and retrieve console logs
+- **Queue Management**: View items currently in the build queue
+- **Server Information**: Get basic information about the connected Jenkins server
+- **LLM Integration**: Includes prompts and configurations for summarizing build logs
+- **Transport Support**: Supports both STDIO and HTTP transports
+- **Input Validation**: Uses Pydantic for robust input validation and error handling
+- **Easy Installation**: Install via npm/npx for seamless integration with Claude Desktop
 
-## Prerequisites
+## Requirements
 
-- Python 3.12+
-- A running Jenkins instance
-- `uv` for package management
+- **Node.js**: 14.0.0 or higher
+- **Python**: 3.12 or higher
+- A running Jenkins instance with API access
 
-## Installation
+## Quick Start
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/AshwiniGhuge3012/jenkins-mcp-server
-    cd jenkins-mcp-server
-    ```
+### Using with Claude Desktop (Recommended)
 
-2.  **Create a virtual environment:**
-    ```bash
-    uv venv
-    ```
+1. **Configure Claude Desktop**: Add this to your Claude Desktop configuration:
 
-3.  **Activate the virtual environment:**
-    ```bash
-    source .venv/bin/activate
-    ```
+```json
+{
+  "mcpServers": {
+    "jenkins": {
+      "command": "npx",
+      "args": ["-y", "@ashwini/jenkins-mcp-server"],
+      "env": {
+        "JENKINS_URL": "http://your-jenkins-instance:8080",
+        "JENKINS_USER": "your-username",
+        "JENKINS_API_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
 
-4.  **Install dependencies:**
-    ```bash
-    uv pip install -e .
-    ```
+2. **Restart Claude Desktop**: The server will be automatically installed and started
 
-5.  **Create a `.env` file:**
-    Create a `.env` file in the project root and add your Jenkins credentials and URL.
-    ```
-    JENKINS_URL="http://your-jenkins-instance:8080"
-    JENKINS_USER="your-username"
-    JENKINS_API_TOKEN="your-api-token"
-    MCP_PORT=8010
-    ```
+### Manual Installation
+
+```bash
+# Install globally
+npm install -g @ashwini/jenkins-mcp-server
+
+# Or run directly with npx
+npx @ashwini/jenkins-mcp-server --help
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in your project root or set these environment variables:
+
+```bash
+JENKINS_URL="http://your-jenkins-instance:8080"
+JENKINS_USER="your-username"
+JENKINS_API_TOKEN="your-api-token"
+MCP_PORT=8010  # Optional: for HTTP mode
+```
+
+### Jenkins API Token
+
+1. Log into your Jenkins instance
+2. Go to **Manage Jenkins** → **Manage Users** → Click on your username
+3. Click **Configure** → **Add new Token**
+4. Generate and copy the API token
 
 ## Usage
 
-### Running the Server
+### STDIO Mode (Default - for Claude Desktop)
 
-You can run the server in two modes:
-
-**1. STDIO Mode** (for direct interaction)
 ```bash
-python jenkins_mcp_server_enhanced.py
+jenkins-mcp
 ```
 
-**2. HTTP Mode** (for use with MCP Gateway)
+### HTTP Mode (for MCP Gateway)
+
 ```bash
-python jenkins_mcp_server_enhanced.py --transport streamable-http --port 8010
+jenkins-mcp --transport streamable-http --port 8010
 ```
-The port can be configured via the `--port` argument or the `MCP_PORT` environment variable.
+
+### Command Line Options
+
+```bash
+jenkins-mcp [options]
+
+Options:
+  --transport <type>    Transport type (stdio|streamable-http) [default: stdio]
+  --port <number>       Port for HTTP transport [default: 8010]
+  --help, -h           Show this help message
+```
 
 ## Available Tools
 
-Here is a list of the tools exposed by this MCP server:
+### 1. `jenkins_server.trigger_job`
+Trigger a Jenkins job with optional parameters.
 
-### `trigger_job`
-- **Description**: Triggers a Jenkins job with optional parameters.
-- **Parameters**:
-    - `job_name` (string): The name of the Jenkins job.
-    - `params` (object, optional): Job parameters as a JSON object. For multiselect parameters, pass an array of strings.
-- **Returns**: A confirmation message with the queue URL.
+**Parameters:**
+- `job_name` (string): The name of the Jenkins job
+- `params` (object, optional): Job parameters as a JSON object
 
-### `get_job_info`
-- **Description**: Gets detailed information about a Jenkins job, including its parameters.
-- **Parameters**:
-    - `job_name` (string): The name of the Jenkins job.
-- **Returns**: An object containing the job's description, parameters, and last build number.
-
-### `get_build_status`
-- **Description**: Gets the status of a specific build.
-- **Parameters**:
-    - `job_name` (string): The name of the Jenkins job.
-    - `build_number` (integer): The build number.
-- **Returns**: An object with the build status, timestamp, duration, and URL.
-
-### `get_console_log`
-- **Description**: Retrieves the console log for a specific build.
-- **Parameters**:
-    - `job_name` (string): The name of the Jenkins job.
-    - `build_number` (integer): The build number.
-    - `start` (integer, optional): The starting byte position for fetching the log.
-- **Returns**: The console log text and information about whether more data is available.
-
-### `list_jobs`
-- **Description**: Lists all available jobs on the Jenkins server.
-- **Parameters**: None
-- **Returns**: A list of job names.
-
-### `get_queue_info`
-- **Description**: Gets information about builds currently in the queue.
-- **Parameters**: None
-- **Returns**: A list of items in the queue.
-
-### `server_info`
-- **Description**: Gets basic information about the Jenkins server.
-- **Parameters**: None
-- **Returns**: The Jenkins version and URL.
-
-### `summarize_build_log`
-- **Description**: (Demonstration) Summarizes a build log using a pre-configured LLM prompt.
-- **Parameters**:
-    - `job_name` (string): The name of the Jenkins job.
-    - `build_number` (integer): The build number.
-- **Returns**: A placeholder summary and the prompt that would be used.
-
-## Example Usage with `mcp-cli`
-
-First, ensure the server is running in HTTP mode and registered with your MCP Gateway.
-
-```bash
-# Example: Triggering a job
-mcp-cli cmd --server gateway --tool jenkins_server.trigger_job --tool-args '{"job_name": "my-test-job", "params": {"branch": "develop", "deploy": true}}'
-
-# Example: Listing all jobs
-mcp-cli cmd --server gateway --tool jenkins_server.list_jobs
+**Example:**
+```json
+{
+  "job_name": "my-deployment-job",
+  "params": {
+    "branch": "main",
+    "environment": "staging",
+    "deploy": true
+  }
+}
 ```
 
-## Dependencies
+### 2. `jenkins_server.get_job_info`
+Get detailed information about a Jenkins job.
 
+**Parameters:**
+- `job_name` (string): The name of the Jenkins job
+
+### 3. `jenkins_server.get_build_status`
+Get the status of a specific build.
+
+**Parameters:**
+- `job_name` (string): The name of the Jenkins job
+- `build_number` (integer): The build number
+
+### 4. `jenkins_server.get_console_log`
+Retrieve the console log for a specific build.
+
+**Parameters:**
+- `job_name` (string): The name of the Jenkins job
+- `build_number` (integer): The build number
+- `start` (integer, optional): Starting byte position for log fetching
+
+### 5. `jenkins_server.list_jobs`
+List all available jobs on the Jenkins server.
+
+**Parameters:** None
+
+### 6. `jenkins_server.get_queue`
+Get information about builds currently in the queue.
+
+**Parameters:** None
+
+### 7. `jenkins_server.get_server_info`
+Get basic information about the Jenkins server.
+
+**Parameters:** None
+
+### 8. `jenkins_server.summarize_build_log`
+Summarize a build log using LLM integration (demonstration feature).
+
+**Parameters:**
+- `job_name` (string): The name of the Jenkins job
+- `build_number` (integer): The build number
+
+## Examples with Claude Desktop
+
+Once configured, you can ask Claude to help with Jenkins tasks:
+
+- *"Can you list all the Jenkins jobs?"*
+- *"Trigger the deployment job for the main branch"*
+- *"What's the status of build #123 for the test-suite job?"*
+- *"Show me the console log for the last failed build"*
+- *"What's currently in the Jenkins build queue?"*
+
+## Troubleshooting
+
+### Python Dependencies
+
+The server automatically installs required Python dependencies:
 - `fastmcp`
 - `pydantic`
 - `requests`
 - `python-dotenv`
 
+If automatic installation fails, install manually:
+```bash
+pip install fastmcp pydantic requests python-dotenv
+```
+
+### Common Issues
+
+1. **Python Version**: Ensure you have Python 3.12 or higher
+2. **Jenkins Connectivity**: Verify your Jenkins URL and credentials
+3. **API Token**: Make sure you're using an API token, not a password
+4. **Firewall**: Ensure Claude Desktop can access your Jenkins instance
+
+### Debug Mode
+
+Set environment variable for verbose logging:
+```bash
+DEBUG=1 jenkins-mcp
+```
+
+## Development
+
+### Local Development
+
+1. Clone the repository:
+```bash
+git clone https://github.com/AshwiniGhuge3012/jenkins-mcp-server.git
+cd jenkins-mcp-server
+```
+
+2. Create the npm package structure:
+```bash
+mkdir -p bin python
+```
+
+3. Copy your Python server to `python/jenkins_mcp_server_enhanced.py`
+
+4. Install and test locally:
+```bash
+npm link
+jenkins-mcp --help
+```
+
+### Publishing
+
+```bash
+npm login
+npm publish --access public
+```
+
 ## License
 
-This project is licensed under the Apache 2.0 License.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/AshwiniGhuge3012/jenkins-mcp-server/issues)
+- **Documentation**: [MCP Documentation](https://modelcontextprotocol.io/docs)
+- **Claude Desktop**: [Claude Desktop MCP Guide](https://docs.anthropic.com/claude/docs/mcp)
+
+## Changelog
+
+### v1.0.0
+- Initial release with npm/npx support
+- STDIO and HTTP transport support
+- Automatic Python dependency management
+- Full Jenkins API integration
+- Claude Desktop compatibility
