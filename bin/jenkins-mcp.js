@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -13,7 +13,6 @@ function findPython() {
   
   for (const cmd of pythonCommands) {
     try {
-      const { execSync } = require('child_process');
       const version = execSync(`${cmd} --version 2>&1`, { encoding: 'utf8' }).trim();
       
       // Check if it's Python 3.12+
@@ -49,25 +48,36 @@ function checkPythonServer() {
 }
 
 // Install Python dependencies if needed
-function checkPythonDependencies() {
-  const requirementsPath = path.join(__dirname, '..', 'requirements.txt');
-  
-  if (fs.existsSync(requirementsPath)) {
+function checkPythonDependencies(pythonCmd) {
+  try {
+    // Try to import required modules
+    execSync(`${pythonCmd} -c "import fastmcp, pydantic, requests, dotenv"`, { stdio: 'ignore' });
+    console.error('[Jenkins MCP] Python dependencies OK');
+  } catch (error) {
+    console.error('[Jenkins MCP] Missing Python dependencies. Installing...');
+    
+    const packages = ['fastmcp', 'pydantic', 'requests', 'python-dotenv'];
+    
     try {
-      const { execSync } = require('child_process');
-      console.error('[Jenkins MCP] Checking Python dependencies...');
-      
-      // Try to import required modules
-      execSync(`${pythonCmd} -c "import fastmcp, pydantic, requests, dotenv"`, { stdio: 'ignore' });
-      console.error('[Jenkins MCP] Python dependencies OK');
-    } catch (error) {
-      console.error('[Jenkins MCP] Installing Python dependencies...');
+      // Try to install using pip
+      execSync(`${pythonCmd} -m pip install ${packages.join(' ')}`, { 
+        stdio: 'inherit',
+        env: { ...process.env, PIP_BREAK_SYSTEM_PACKAGES: '1' }
+      });
+      console.error('[Jenkins MCP] Dependencies installed successfully');
+    } catch (installError) {
+      // If pip fails, try with --user flag
       try {
-        execSync(`${pythonCmd} -m pip install fastmcp pydantic requests python-dotenv`, { stdio: 'inherit' });
-        console.error('[Jenkins MCP] Dependencies installed successfully');
-      } catch (installError) {
-        console.error('ERROR: Failed to install Python dependencies');
-        console.error('Please run: pip install fastmcp pydantic requests python-dotenv');
+        execSync(`${pythonCmd} -m pip install --user ${packages.join(' ')}`, { 
+          stdio: 'inherit' 
+        });
+        console.error('[Jenkins MCP] Dependencies installed successfully (user mode)');
+      } catch (userInstallError) {
+        console.error('\nERROR: Failed to install Python dependencies automatically.');
+        console.error('Please install them manually:');
+        console.error(`  ${pythonCmd} -m pip install ${packages.join(' ')}`);
+        console.error('\nOr if you get a system packages error:');
+        console.error(`  ${pythonCmd} -m pip install --user ${packages.join(' ')}`);
         process.exit(1);
       }
     }
@@ -112,6 +122,10 @@ Examples:
   jenkins-mcp                                    # STDIO mode (for Claude Desktop)
   jenkins-mcp --transport streamable-http       # HTTP mode (for MCP Gateway)
   jenkins-mcp --transport streamable-http --port 8080
+
+Python Requirements:
+  - Python 3.12 or higher
+  - Required packages: fastmcp, pydantic, requests, python-dotenv
         `);
         process.exit(0);
         break;
@@ -123,6 +137,30 @@ Examples:
 
 // Validate environment variables
 function validateEnvironment() {
+  // First, try to load from .env file if it exists
+  const envPath = path.join(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    try {
+      const dotenv = require('dotenv');
+      dotenv.config({ path: envPath });
+      console.error('[Jenkins MCP] Loaded configuration from .env file');
+    } catch (error) {
+      // If dotenv is not available, manually parse the .env file
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      envContent.split('\n').forEach(line => {
+        const match = line.match(/^([^=]+)=(.*)$/);
+        if (match) {
+          const key = match[1].trim();
+          const value = match[2].trim().replace(/^["']|["']$/g, '');
+          if (!process.env[key]) {
+            process.env[key] = value;
+          }
+        }
+      });
+      console.error('[Jenkins MCP] Loaded configuration from .env file (manual parse)');
+    }
+  }
+  
   const required = ['JENKINS_URL', 'JENKINS_USER', 'JENKINS_API_TOKEN'];
   const missing = required.filter(env => !process.env[env]);
   
@@ -130,7 +168,7 @@ function validateEnvironment() {
     console.error('ERROR: Missing required environment variables:');
     missing.forEach(env => console.error(`  - ${env}`));
     console.error('\nPlease set these environment variables or create a .env file');
-    console.error('\nExample:');
+    console.error('\nExample .env file:');
     console.error('  JENKINS_URL="http://your-jenkins:8080"');
     console.error('  JENKINS_USER="your-username"');
     console.error('  JENKINS_API_TOKEN="your-api-token"');
@@ -141,7 +179,7 @@ function validateEnvironment() {
 // Main execution
 const pythonCmd = findPython();
 checkPythonServer();
-checkPythonDependencies();
+checkPythonDependencies(pythonCmd);
 
 const config = parseArgs();
 validateEnvironment();
