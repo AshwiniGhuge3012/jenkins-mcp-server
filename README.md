@@ -251,7 +251,7 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 
 ## Changelog
 
-### v1.0.0
+### v1.0.1
 - Initial release with npm/npx support
 - STDIO and HTTP transport support
 - Automatic Python dependency management

@@ -1,10 +1,10 @@
 {
   "name": "@ashwinighuge3012/jenkins-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.",
   "main": "bin/jenkins-mcp.js",
   "bin": {
-    "jenkins-mcp": "./bin/jenkins-mcp.js"
+    "jenkins-mcp": "bin/jenkins-mcp.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
