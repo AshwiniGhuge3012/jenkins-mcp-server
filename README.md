@@ -30,7 +30,7 @@ An MCP (Model Context Protocol) server for interacting with a Jenkins CI/CD serv
   "mcpServers": {
     "jenkins": {
       "command": "npx",
-      "args": ["-y", "@ashwini/jenkins-mcp-server"],
+      "args": ["-y", "@ashwinighuge3012/jenkins-mcp-server"],
       "env": {
         "JENKINS_URL": "http://your-jenkins-instance:8080",
         "JENKINS_USER": "your-username",
@@ -47,10 +47,10 @@ An MCP (Model Context Protocol) server for interacting with a Jenkins CI/CD serv
 
 ```bash
 # Install globally
-npm install -g @ashwini/jenkins-mcp-server
+npm install -g @ashwinighuge3012/jenkins-mcp-server
 
 # Or run directly with npx
-npx @ashwini/jenkins-mcp-server --help
+npx @ashwinighuge3012/jenkins-mcp-server --help
 ```
 
 ## Configuration
