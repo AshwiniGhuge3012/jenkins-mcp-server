@@ -1,5 +1,5 @@
 {
-  "name": "@ashwinighuge3012/jenkins-mcp-server",
+  "name": "@ashwinighuge/jenkins-mcp-server",
   "version": "1.0.1",
   "description": "An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.",
   "main": "bin/jenkins-mcp.js",
