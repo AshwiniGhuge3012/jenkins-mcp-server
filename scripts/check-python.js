@@ -35,7 +35,7 @@ function checkPython() {
     console.warn('   Please install Python 3.12 or higher to use this package.');
     console.warn('   Download from: https://www.python.org/downloads/\n');
     console.warn('   After installing Python, you may need to install the required packages:');
-    console.warn('   pip install fastmcp pydantic requests python-dotenv\n');
+    console.warn('   pip install fastmcp pydantic requests python-dotenv fastapi\n');
   } else {
     console.log('\nPython dependency check completed successfully.\n');
   }

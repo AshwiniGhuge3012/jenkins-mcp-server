@@ -51,12 +51,12 @@ function checkPythonServer() {
 function checkPythonDependencies(pythonCmd) {
   try {
     // Try to import required modules
-    execSync(`${pythonCmd} -c "import fastmcp, pydantic, requests, dotenv"`, { stdio: 'ignore' });
+    execSync(`${pythonCmd} -c "import fastmcp, pydantic, requests, dotenv, fastapi"`, { stdio: 'ignore' });
     console.error('[Jenkins MCP] Python dependencies OK');
   } catch (error) {
     console.error('[Jenkins MCP] Missing Python dependencies. Installing...');
     
-    const packages = ['fastmcp', 'pydantic', 'requests', 'python-dotenv'];
+    const packages = ['fastmcp', 'pydantic', 'requests', 'python-dotenv', 'fastapi'];
     
     try {
       // Try to install using pip

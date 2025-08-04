@@ -181,10 +181,11 @@ The server automatically installs required Python dependencies:
 - `pydantic`
 - `requests`
 - `python-dotenv`
+- `fastapi`
 
 If automatic installation fails, install manually:
 ```bash
-pip install fastmcp pydantic requests python-dotenv
+pip install fastmcp pydantic requests python-dotenv fastapi
 ```
 
 ### Common Issues
@@ -250,6 +251,11 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 - **Claude Desktop**: [Claude Desktop MCP Guide](https://docs.anthropic.com/claude/docs/mcp)
 
 ## Changelog
+
+### v1.0.5
+- Fixed missing `fastapi` dependency in Python requirements
+- Updated dependency installation to include all required packages
+- Improved cross-platform compatibility
 
 ### v1.0.1
 - Initial release with npm/npx support
