@@ -9,7 +9,7 @@ const pythonServerPath = path.join(__dirname, '..', 'python', 'jenkins_mcp_serve
 
 // Check if python3 or python is available and get version
 function findPython() {
-  const pythonCommands = ['python3', 'python'];
+  const pythonCommands = ['python', 'python3'];
   
   for (const cmd of pythonCommands) {
     try {
