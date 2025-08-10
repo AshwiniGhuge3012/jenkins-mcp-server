@@ -1,13 +1,13 @@
 {
   "name": "@ashwinighuge/jenkins-mcp-server",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.",
   "main": "bin/jenkins-mcp.js",
   "bin": {
     "jenkins-mcp": "bin/jenkins-mcp.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "python -m pytest test/ -v",
     "prepare": "chmod +x bin/jenkins-mcp.js",
     "postinstall": "node scripts/check-python.js"
   },
@@ -18,9 +18,12 @@
     "ci-cd",
     "automation",
     "build",
-    "deployment"
+    "deployment",
+    "model-context-protocol",
+    "llm",
+    "ai-assistant"
   ],
-  "author": "Ashwini Ghuge <your-email@example.com>",
+  "author": "Ashwini Ghuge <ashwini.ghuge@example.com>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -35,7 +38,8 @@
     "python/",
     "scripts/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "pyproject.toml"
   ],
   "engines": {
     "node": ">=14.0.0"
@@ -43,5 +47,10 @@
   "dependencies": {},
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
 }
