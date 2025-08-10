@@ -1,95 +1,173 @@
-# Jenkins MCP Server.
+# Jenkins MCP Server
 
-An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.
+[![npm version](https://badge.fury.io/js/@ashwinighuge%2Fjenkins-mcp-server.svg)](https://badge.fury.io/js/@ashwinighuge%2Fjenkins-mcp-server)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-## Features
+An enterprise-grade MCP (Model Context Protocol) server for seamless Jenkins CI/CD integration. Enables AI assistants like Claude to interact with Jenkins through a comprehensive, production-ready API.
 
-- **Job Management**: Trigger, list, and get detailed information about Jenkins jobs.
-- **Build Status**: Check the status of specific builds and retrieve console logs.
-- **Pipeline Support**: Get detailed stage-by-stage pipeline execution status.
-- **Artifact Management**: List, download, and search build artifacts across builds.
-- **Batch Operations**: Trigger and monitor multiple jobs concurrently with intelligent queuing.
-- **Performance Caching**: Multi-tier intelligent caching system with automatic invalidation and cache management tools.
-- **Advanced Filtering**: Filter jobs by status, build results, dates, and more with regex support.
-- **Queue Management**: View items currently in the build queue.
-- **Server Information**: Get basic information about the connected Jenkins server.
-- **Retry Mechanisms**: Built-in exponential backoff retry logic for improved reliability.
-- **LLM Integration**: Includes prompts and configurations for summarizing build logs (demonstration).
-- **Transport Support**: Supports both STDIO and Streamable HTTP transports.
-- **Input Validation**: Uses Pydantic for robust input validation and error handling.
-- **Compatibility**: Fully compatible with the MCP Gateway.
+## 🚀 Quick Start
 
-## Prerequisites
+### npm Installation (Recommended)
 
-- Python 3.12+
-- A running Jenkins instance
-- `uv` for package management
-
-## Installation
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/AshwiniGhuge3012/jenkins-mcp-server
-    cd jenkins-mcp-server
-    ```
-
-2.  **Create a virtual environment:**
-    ```bash
-    uv venv
-    ```
-
-3.  **Activate the virtual environment:**
-    ```bash
-    source .venv/bin/activate
-    ```
-
-4.  **Install dependencies:**
-    ```bash
-    uv pip install -e .
-    ```
-
-5.  **Create a `.env` file:**
-    Create a `.env` file in the project root and add your Jenkins credentials and URL.
-    ```
-    JENKINS_URL="http://your-jenkins-instance:8080"
-    JENKINS_USER="your-username"
-    JENKINS_API_TOKEN="your-api-token"
-    MCP_PORT=8010
-    
-    # Optional: Retry mechanism configuration
-    JENKINS_MAX_RETRIES=3
-    JENKINS_RETRY_BASE_DELAY=1.0
-    JENKINS_RETRY_MAX_DELAY=60.0
-    JENKINS_RETRY_BACKOFF_MULTIPLIER=2.0
-    
-    # Optional: Performance cache configuration
-    JENKINS_CACHE_STATIC_TTL=3600        # Static data TTL (1 hour)
-    JENKINS_CACHE_SEMI_STATIC_TTL=300    # Semi-static data TTL (5 minutes)
-    JENKINS_CACHE_DYNAMIC_TTL=30         # Dynamic data TTL (30 seconds)
-    JENKINS_CACHE_SHORT_TTL=10           # Short-lived data TTL (10 seconds)
-    JENKINS_CACHE_STATIC_SIZE=1000       # Static cache max items
-    JENKINS_CACHE_SEMI_STATIC_SIZE=500   # Semi-static cache max items
-    JENKINS_CACHE_DYNAMIC_SIZE=200       # Dynamic cache max items
-    JENKINS_CACHE_PERMANENT_SIZE=2000    # Permanent cache max items
-    JENKINS_CACHE_SHORT_SIZE=100         # Short-lived cache max items
-    ```
-
-## Usage
-
-### Running the Server
-
-You can run the server in two modes:
-
-**1. STDIO Mode** (for direct interaction)
 ```bash
-python jenkins_mcp_server_enhanced.py
+# Global installation
+npm install -g @ashwinighuge/jenkins-mcp-server
+
+# Or use directly with npx
+npx @ashwinighuge/jenkins-mcp-server --help
 ```
 
-**2. HTTP Mode** (for use with MCP Gateway)
-```bash
-python jenkins_mcp_server_enhanced.py --transport streamable-http --port 8010
+### Claude Desktop Integration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "jenkins": {
+      "command": "jenkins-mcp",
+      "env": {
+        "JENKINS_URL": "http://your-jenkins-server:8080",
+        "JENKINS_USER": "your-username",
+        "JENKINS_API_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
 ```
-The port can be configured via the `--port` argument or the `MCP_PORT` environment variable.
+
+## ✨ Features
+
+- **🔧 Job Management**: Trigger, list, search, and monitor Jenkins jobs with full folder support
+- **📊 Build Status**: Real-time build status tracking and console log streaming
+- **🔄 Pipeline Support**: Stage-by-stage pipeline execution monitoring with detailed logs
+- **📦 Artifact Management**: List, download, and search build artifacts across multiple builds
+- **⚡ Batch Operations**: Parallel job execution with intelligent priority queuing
+- **🚀 Performance Caching**: Multi-tier intelligent caching system with automatic invalidation
+- **🔍 Advanced Filtering**: Filter jobs by status, results, dates, and more with regex support
+- **📋 Queue Management**: Real-time build queue monitoring and management
+- **🔒 Enterprise Security**: CSRF protection, 2FA support, and secure authentication
+- **🌐 Cross-Platform**: Works on Windows, macOS, and Linux
+- **🔄 Retry Logic**: Built-in exponential backoff for improved reliability
+- **📡 Transport Flexibility**: Supports both STDIO and HTTP transports
+- **✅ Input Validation**: Robust Pydantic-based validation and error handling
+
+## 📋 Prerequisites
+
+- **Node.js**: 14.0.0 or higher
+- **Python**: 3.12 or higher
+- **Jenkins**: 2.401+ (recommended)
+- **Jenkins API Token**: For authentication
+
+## 🛠 Installation Methods
+
+### Method 1: npm (Recommended)
+
+```bash
+# Install globally for system-wide access
+npm install -g @ashwinighuge/jenkins-mcp-server
+
+# Verify installation
+jenkins-mcp --help
+```
+
+### Method 2: Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/AshwiniGhuge3012/jenkins-mcp-server
+cd jenkins-mcp-server
+
+# Install Node.js dependencies
+npm install
+
+# Install Python dependencies
+pip install -r requirements.txt  # or use uv pip install
+
+# Run locally
+node bin/jenkins-mcp.js --help
+```
+
+## 🔐 Configuration
+
+### Environment Variables
+
+Create a `.env` file in your working directory:
+
+```bash
+# Required Jenkins Configuration
+JENKINS_URL="http://your-jenkins-server:8080"
+JENKINS_USER="your-username"
+JENKINS_API_TOKEN="your-api-token"
+
+# Optional: Server Configuration
+MCP_PORT=8010
+MCP_HOST=0.0.0.0
+
+# Optional: Retry Configuration
+JENKINS_MAX_RETRIES=3
+JENKINS_RETRY_BASE_DELAY=1.0
+JENKINS_RETRY_MAX_DELAY=60.0
+JENKINS_RETRY_BACKOFF_MULTIPLIER=2.0
+
+# Optional: Performance Cache Configuration
+JENKINS_CACHE_STATIC_TTL=3600        # 1 hour
+JENKINS_CACHE_SEMI_STATIC_TTL=300    # 5 minutes
+JENKINS_CACHE_DYNAMIC_TTL=30         # 30 seconds
+JENKINS_CACHE_SHORT_TTL=10           # 10 seconds
+JENKINS_CACHE_STATIC_SIZE=1000       # Max cached items
+JENKINS_CACHE_SEMI_STATIC_SIZE=500
+JENKINS_CACHE_DYNAMIC_SIZE=200
+JENKINS_CACHE_PERMANENT_SIZE=2000
+JENKINS_CACHE_SHORT_SIZE=100
+```
+
+### Getting Jenkins API Token
+
+1. Log into your Jenkins instance
+2. Click your username → **Configure**
+3. Scroll to **API Token** section
+4. Click **Add new Token**
+5. Give it a name and click **Generate**
+6. Copy the generated token (save it securely!)
+
+## 🚀 Usage
+
+### Command Line Interface
+
+```bash
+# STDIO mode (default, for Claude Desktop)
+jenkins-mcp
+
+# HTTP mode (for MCP Gateway)
+jenkins-mcp --transport streamable-http --port 8010
+
+# Custom host and port
+jenkins-mcp --transport streamable-http --host localhost --port 9000
+
+# Show help
+jenkins-mcp --help
+```
+
+### Transport Modes
+
+| Mode | Use Case | Command |
+|------|----------|---------|
+| **STDIO** | Claude Desktop, direct MCP clients | `jenkins-mcp` |
+| **HTTP** | MCP Gateway, web integrations | `jenkins-mcp --transport streamable-http` |
+
+### Advanced Usage Examples
+
+```bash
+# Using with npx (no global installation)
+npx @ashwinighuge/jenkins-mcp-server
+
+# Using environment variables
+JENKINS_URL=http://localhost:8080 JENKINS_USER=admin JENKINS_API_TOKEN=abc123 jenkins-mcp
+
+# HTTP mode with custom configuration
+jenkins-mcp --transport streamable-http --host 0.0.0.0 --port 8080
+```
 
 ## Available Tools
 
@@ -240,25 +318,127 @@ Here is a list of the tools exposed by this MCP server:
     - `build_number` (integer): The build number.
 - **Returns**: A placeholder summary and the prompt that would be used.
 
-## Example Usage with `mcp-cli`
+## 💡 Usage Examples
 
-First, ensure the server is running in HTTP mode and registered with your MCP Gateway.
+### With Claude Desktop
+
+Once configured in `claude_desktop_config.json`, you can ask Claude:
+
+> "List all Jenkins jobs"
+> 
+> "Trigger the deploy-prod job with version parameter 1.2.3"
+> 
+> "Show me the console log for build #45 of the api-tests job"
+> 
+> "What's the status of all jobs that failed in the last 24 hours?"
+
+### With MCP Gateway
 
 ```bash
-# Example: Triggering a job
-mcp-cli cmd --server gateway --tool jenkins_server.trigger_job --tool-args '{"job_name": "my-test-job", "params": {"branch": "develop", "deploy": true}}'
+# Start server in HTTP mode
+jenkins-mcp --transport streamable-http --port 8010
 
-# Example: Listing all jobs
-mcp-cli cmd --server gateway --tool jenkins_server.list_jobs
+# Example API calls (using curl)
+curl -X POST http://localhost:8010/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"method": "tools/call", "params": {"name": "list_jobs", "arguments": {}}}'
 ```
 
-## Dependencies
+### Batch Operations Example
 
-- `fastmcp`
-- `pydantic`
-- `requests`
-- `python-dotenv`
+```bash
+# Trigger multiple jobs with different priorities
+jenkins-mcp # Then use batch_trigger_jobs tool with:
+{
+  "operations": [
+    {"job_name": "unit-tests", "priority": 1},
+    {"job_name": "integration-tests", "priority": 2},
+    {"job_name": "deploy-staging", "priority": 3}
+  ],
+  "max_concurrent": 3,
+  "wait_for_completion": true
+}
+```
 
-## License
+## 🔧 Troubleshooting
 
-This project is licensed under the Apache 2.0 License.
+### Common Issues
+
+**Python Dependencies**
+```bash
+# If Python packages fail to install automatically
+pip install mcp[cli] pydantic requests python-dotenv fastapi cachetools
+
+# Or using uv (recommended)
+uv pip install mcp[cli] pydantic requests python-dotenv fastapi cachetools
+```
+
+**Permission Issues (Linux/macOS)**
+```bash
+# If permission denied
+sudo npm install -g @ashwinighuge/jenkins-mcp-server
+
+# Or use user-level installation
+npm install -g @ashwinighuge/jenkins-mcp-server --prefix ~/.local
+```
+
+**Jenkins Connection Issues**
+- Verify `JENKINS_URL` is accessible
+- Ensure API token is valid and not expired
+- Check firewall/proxy settings
+- For HTTPS, verify SSL certificates
+
+**2FA/CSRF Issues**
+- The server handles CSRF tokens automatically
+- For 2FA environments, use API tokens (not passwords)
+- Email OTP and similar 2FA methods are supported
+
+### Debug Mode
+
+```bash
+# Enable verbose logging
+DEBUG=jenkins-mcp jenkins-mcp
+
+# Check Python dependencies
+jenkins-mcp --help  # Will validate dependencies
+```
+
+## 📊 Performance Features
+
+- **Multi-tier Caching**: Intelligent caching with automatic invalidation
+- **Batch Processing**: Parallel job execution with priority queuing
+- **Retry Logic**: Exponential backoff for network reliability
+- **Connection Pooling**: Efficient HTTP connection management
+- **Memory Optimization**: Configurable cache sizes and TTL values
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+
+## 🙋‍♂️ Support
+
+- **Documentation**: [GitHub README](https://github.com/AshwiniGhuge3012/jenkins-mcp-server#readme)
+- **Issues**: [GitHub Issues](https://github.com/AshwiniGhuge3012/jenkins-mcp-server/issues)
+- **npm Package**: [@ashwinighuge/jenkins-mcp-server](https://www.npmjs.com/package/@ashwinighuge/jenkins-mcp-server)
+
+## 🏗️ Architecture
+
+Built with:
+- **Python 3.12+** - Core server implementation
+- **FastMCP** - MCP protocol handling
+- **Node.js** - Cross-platform wrapper and process management
+- **Pydantic** - Data validation and serialization
+- **Requests** - HTTP client with retry logic
+- **CacheTools** - Multi-tier performance caching
+
+---
+
+

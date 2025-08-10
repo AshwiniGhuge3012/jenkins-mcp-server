@@ -1,6 +1,6 @@
 [project]
 name = "mcp-jenkins-server"
-version = "0.1.0"
+version = "1.0.7"
 description = "An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,4 +8,14 @@ dependencies = [
     "mcp[cli]>=1.11.0",
     "requests>=2.32.4",
     "cachetools>=5.5.0",
+    "fastapi",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.12.0",
+    "python-dotenv>=1.0.0",
 ]

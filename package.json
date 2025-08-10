@@ -1,0 +1,56 @@
+{
+  "name": "@ashwinighuge/jenkins-mcp-server",
+  "version": "1.0.7",
+  "description": "An MCP server for interacting with a Jenkins CI/CD server. Allows you to trigger jobs, check build statuses, and manage your Jenkins instance through MCP.",
+  "main": "bin/jenkins-mcp.js",
+  "bin": {
+    "jenkins-mcp": "bin/jenkins-mcp.js"
+  },
+  "scripts": {
+    "test": "python -m pytest test/ -v",
+    "prepare": "chmod +x bin/jenkins-mcp.js",
+    "postinstall": "node scripts/check-python.js"
+  },
+  "keywords": [
+    "mcp",
+    "jenkins",
+    "claude",
+    "ci-cd",
+    "automation",
+    "build",
+    "deployment",
+    "model-context-protocol",
+    "llm",
+    "ai-assistant"
+  ],
+  "author": "Ashwini Ghuge <ashwini.ghuge@example.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AshwiniGhuge3012/jenkins-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AshwiniGhuge3012/jenkins-mcp-server/issues"
+  },
+  "homepage": "https://github.com/AshwiniGhuge3012/jenkins-mcp-server#readme",
+  "files": [
+    "bin/",
+    "python/",
+    "scripts/",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {},
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
+}

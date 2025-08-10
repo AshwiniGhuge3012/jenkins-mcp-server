@@ -13,3 +13,6 @@ uv.lock
 
 CLAUDE.md
 .gitignore
+test
+test_live_jenkins.py
+test*

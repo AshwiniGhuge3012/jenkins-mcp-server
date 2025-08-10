@@ -582,7 +582,10 @@ def cached_request(cache_type: str = 'dynamic', key_func=None):
             if key_func:
                 key = key_func(*args, **kwargs)
             else:
-                key = hashkey(func.__name__, *args, **tuple(sorted(kwargs.items())))
+                # Create a simple string-based key for compatibility
+                args_str = "_".join(str(arg) for arg in args)
+                kwargs_str = "_".join(f"{k}={v}" for k, v in sorted(kwargs.items()))
+                key = f"{func.__name__}_{args_str}_{kwargs_str}"
             
             # Get appropriate cache
             cache = cache_manager.get_cache_for_type(cache_type)
@@ -962,6 +965,8 @@ def jenkins_request(method, endpoint, context: Dict[str, Any], is_job_specific: 
 
 # Initialize FastMCP
 parser = argparse.ArgumentParser(description="Jenkins MCP Server", add_help=False)
+parser.add_argument("--transport", type=str, default="stdio",
+                    help="Transport type (stdio|streamable-http) [default: stdio]")
 parser.add_argument("--port", type=str, default=JenkinsConfig.DEFAULT_PORT,
                     help=f"Port for the MCP server (default: {JenkinsConfig.DEFAULT_PORT} or from MCP_PORT env var)")
 parser.add_argument("--host", type=str, default=JenkinsConfig.DEFAULT_HOST,
@@ -2720,10 +2725,18 @@ def get_health() -> HealthCheckResponse:
 
 if __name__ == "__main__":
     try:
-        logger.info(f"Starting Jenkins MCP server on port {args.port}")
-        sys.argv = [sys.argv[0]] + unknown
-        mcp.run(transport="streamable-http")
+        if args.transport == "stdio":
+            logger.info("Starting Jenkins MCP server in STDIO mode")
+            sys.argv = [sys.argv[0]] + unknown
+            mcp.run()
+        else:
+            logger.info(f"Starting Jenkins MCP server in {args.transport} mode on port {args.port}")
+            sys.argv = [sys.argv[0]] + unknown
+            mcp.run(transport=args.transport)
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+        sys.exit(0)
     except Exception as e:
-        logger.exception("Fatal error in MCP server runtime:")
+        logger.error(f"Failed to start Jenkins MCP server: {e}")
         sys.exit(1)
 
